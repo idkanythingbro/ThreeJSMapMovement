@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { GLTFLoader } from "three/examples/jsm/Addons.js";
 import { instance } from "three/tsl";
+import { Vector3 } from "three/webgpu";
+
+import { gsap } from "gsap";
 
 const sizes = {
   width: window.innerWidth,
@@ -10,9 +13,11 @@ const sizes = {
 
 let character = {
   instance: null,
-  moveDistance: 3,
-
-}
+  moveDistance: 10,
+  jumpHeight: 3,
+  isMoving: false,
+  moveDuration: 0.2,
+};
 
 let intersectObject = "";
 const intersectObjects = [];
@@ -31,7 +36,7 @@ loader.load(
         child.receiveShadow = true;
       }
 
-      if(child.name == "character001"){
+      if (child.name == "character001") {
         character.instance = child;
       }
       // console.log(child);
@@ -137,7 +142,6 @@ camera.position.z = 348.9037679764594;
 // camera.position.y = 239;
 // camera.position.z = 405;
 
-
 const controls = new OrbitControls(camera, canvas);
 controls.update();
 
@@ -167,26 +171,65 @@ function onClick() {
   }
 }
 
-function onKeydown(event){
-  console.log(event);
-  switch(event.key.toLowerCase()){
+function moveCharacter(targetPosition, targetRotation) {
+  character.isMoving = true;
+
+  const t1 = gsap.timeline({
+    onComplete: () => {
+      character.isMoving = false;
+    },
+  });
+  t1.to(character.instance.position, {
+    x: targetPosition.x,
+    z: targetPosition.z,
+    duration: character.moveDuration,
+  });
+  t1.to(
+    character.instance.rotation,
+    {
+      y: targetRotation,
+      duration: character.moveDuration,
+    },
+    0
+  );
+  t1.to(character.instance.position, {
+    y: character.instance.position.y + character.jumpHeight,
+    duration: character.moveDuration/2,
+    yoyo: true,
+    repeat: 1,
+  }, 0);
+}
+
+function onKeydown(event) {
+  // console.log(event);
+  if (character.isMoving) return;
+  const targetPosition = new THREE.Vector3().copy(character.instance.position);
+  let targetRotation = 0;
+  switch (event.key.toLowerCase()) {
     case "w":
     case "arrowup":
-      character.instance.position.z -= character.moveDistance;
+      targetPosition.z -= character.moveDistance;
+      targetRotation = 0;
       break;
     case "s":
     case "arrowdown":
-      character.instance.position.z += character.moveDistance;
+      targetPosition.z += character.moveDistance;
+      targetRotation = Math.PI;
       break;
     case "a":
     case "arrowleft":
-      character.instance.position.x -= character.moveDistance;
+      targetPosition.x -= character.moveDistance;
+      targetRotation = -Math.PI / 2;
       break;
     case "d":
     case "arrowright":
-      character.instance.position.x += character.moveDistance;
+      targetPosition.x += character.moveDistance;
+      targetRotation = Math.PI / 2;
       break;
+    default:
+      return;
   }
+  moveCharacter(targetPosition, targetRotation);
 }
 
 modalExitButton.addEventListener("click", hideModal);
