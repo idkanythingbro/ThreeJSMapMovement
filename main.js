@@ -36,10 +36,10 @@ loader.load(
         child.receiveShadow = true;
       }
 
-      if (child.name == "character001") {
+      if (child.name === "character001") {
         character.instance = child;
       }
-      // console.log(child);
+      console.log(child);
     });
     scene.add(glb.scene);
   },
@@ -57,10 +57,12 @@ const camera = new THREE.OrthographicCamera(
   aspect * 160,
   280,
   -110,
-  1,
+  0.1,
   2000
 );
 const raycaster = new THREE.Raycaster();
+raycaster.firstHitOnly = true;
+
 const pointer = new THREE.Vector2();
 const sun = new THREE.DirectionalLight(0xffffff);
 sun.castShadow = true;
@@ -114,6 +116,53 @@ const modalProjectVisitButton = document.querySelector(
   ".modal-project-visit-button"
 );
 
+function jumpCharacter(meshID) {
+  const mesh = scene.getObjectByName(meshID);
+  const jumpHeight = 2;
+  const jumpDuration = 0.5;
+
+  const t1 = gsap.timeline();
+
+  t1.to(mesh.scale, {
+    x: 4.517452239990234 * 1.005,
+    y: 3.5739898681640625 * 0.995,
+    z: 2.981771230697632 * 1.05,
+    duration: jumpDuration * 0.2,
+    ease: "power2.out",
+  });
+  t1.to(mesh.scale, {
+    x: 4.517452239990234 * 0.995,
+    y: 3.5739898681640625 * 1.005,
+    z: 2.981771230697632 * 0.995,
+    duration: jumpDuration * 0.3,
+    ease: "power2.out",
+  });
+  t1.to(mesh.position, {
+    y: mesh.position.y + jumpHeight,
+    duration: jumpDuration * 0.5,
+    ease: "power2.out",
+  });
+  t1.to(mesh.scale, {
+    x: 4.517452239990234,
+    y: 3.5739898681640625,
+    z: 2.981771230697632,
+    duration: jumpDuration * 0.3,
+    ease: "power1.inOut",
+  });
+  t1.to(mesh.position, {
+    y: mesh.position.y,
+    duration: jumpDuration * 0.5,
+    ease: "bounce.out",
+  });
+  t1.to(mesh.scale, {
+    x: 4.517452239990234,
+    y: 3.5739898681640625,
+    z: 2.981771230697632,
+    duration: jumpDuration * 0.2,
+    ease: "elastic.out(1, 0.3)",
+  });
+}
+
 function showModal(id) {
   const content = modalContent[id];
   if (content) {
@@ -161,18 +210,28 @@ function onResize() {
 
 function onPointerMove(event) {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = (event.clientY / window.innerHeight) * 2 + 1;
+  pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 
 function onClick() {
   // console.log(intersectObject);
   if (intersectObject != "") {
-    showModal(intersectObject);
+    if (["character001"].includes(intersectObject)) {
+      jumpCharacter(intersectObject);
+    }
+    // showModal(intersectObject);
   }
 }
 
 function moveCharacter(targetPosition, targetRotation) {
   character.isMoving = true;
+
+  let rotationDiff =
+    ((((targetRotation - character.instance.rotation.y) % (2 * Math.PI)) +
+      3 * Math.PI) %
+      (2 * Math.PI)) -
+    Math.PI;
+  let finalRotation = character.instance.rotation.y + rotationDiff;
 
   const t1 = gsap.timeline({
     onComplete: () => {
@@ -187,17 +246,21 @@ function moveCharacter(targetPosition, targetRotation) {
   t1.to(
     character.instance.rotation,
     {
-      y: targetRotation,
+      y: finalRotation,
       duration: character.moveDuration,
     },
     0
   );
-  t1.to(character.instance.position, {
-    y: character.instance.position.y + character.jumpHeight,
-    duration: character.moveDuration/2,
-    yoyo: true,
-    repeat: 1,
-  }, 0);
+  t1.to(
+    character.instance.position,
+    {
+      y: character.instance.position.y + character.jumpHeight,
+      duration: character.moveDuration / 2,
+      yoyo: true,
+      repeat: 1,
+    },
+    0
+  );
 }
 
 function onKeydown(event) {
