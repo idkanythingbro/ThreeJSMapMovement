@@ -4,6 +4,9 @@ import { GLTFLoader } from "three/examples/jsm/Addons.js";
 import { instance } from "three/tsl";
 import { Vector3 } from "three/webgpu";
 
+import { Octree } from "three/addons/math/Octree.js";
+import { Capsule } from "three/addons/math/Capsule.js";
+
 import { gsap } from "gsap";
 
 const sizes = {
@@ -13,41 +16,20 @@ const sizes = {
 
 let character = {
   instance: null,
-  moveDistance: 10,
-  jumpHeight: 3,
   isMoving: false,
-  moveDuration: 0.2,
 };
+let targetRotation = 0;
 
 let intersectObject = "";
 const intersectObjects = [];
 const intersectObjectsNames = ["character001"];
 
-const loader = new GLTFLoader();
-loader.load(
-  "./MODELS.glb",
-  function (glb) {
-    glb.scene.traverse((child) => {
-      if (intersectObjectsNames.includes(child.name)) {
-        intersectObjects.push(child);
-      }
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-
-      if (child.name === "character001") {
-        character.instance = child;
-      }
-      console.log(child);
-    });
-    scene.add(glb.scene);
-  },
-  undefined,
-  function (error) {
-    console.log(error);
-  }
-);
+//Physics
+const GRAVITY = 30;
+const CAPSULE_RADIUS = 0.35;
+const CAPSULE_HEIGHT = 1;
+const JUMP_HEIGHT = 2;
+const MOVE_SPEED = 4;
 
 const scene = new THREE.Scene();
 const canvas = document.getElementById("experience-canvas");
@@ -86,6 +68,54 @@ scene.add(shadowHelper);
 const light = new THREE.AmbientLight(0x404040, 30);
 scene.add(light);
 
+const colliderOctTree = new Octree();
+const playerCollider = new Capsule(
+  new THREE.Vector3(0, CAPSULE_RADIUS, 0),
+  new THREE.Vector3(0, CAPSULE_HEIGHT, 0),
+  CAPSULE_RADIUS
+);
+
+let playerVelocity = new THREE.Vector3();
+let playerOnFloor = false;
+
+const loader = new GLTFLoader();
+loader.load(
+  "./MODELSv3.glb",
+  function (glb) {
+    glb.scene.traverse((child) => {
+      if (intersectObjectsNames.includes(child.name)) {
+        intersectObjects.push(child);
+      }
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+
+      if (child.name === "character001") {
+        character.instance = child;
+        playerCollider.start
+          .copy(child.position)
+          .add(new THREE.Vector3(0, CAPSULE_RADIUS, 0));
+        playerCollider.end
+          .copy(child.position)
+          .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
+      }
+
+      if (child.name === "collider"){
+        console.log(child);
+        // child.updateWorldMatrix(true, true);
+        colliderOctTree.fromGraphNode(child);
+      }
+      // console.log(child);
+    });
+    scene.add(glb.scene);
+  },
+  undefined,
+  function (error) {
+    console.log(error);
+  }
+);
+
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -116,52 +146,52 @@ const modalProjectVisitButton = document.querySelector(
   ".modal-project-visit-button"
 );
 
-function jumpCharacter(meshID) {
-  const mesh = scene.getObjectByName(meshID);
-  const jumpHeight = 2;
-  const jumpDuration = 0.5;
+// function jumpCharacter(meshID) {
+//   const mesh = scene.getObjectByName(meshID);
+//   const jumpHeight = 2;
+//   const jumpDuration = 0.5;
 
-  const t1 = gsap.timeline();
+//   const t1 = gsap.timeline();
 
-  t1.to(mesh.scale, {
-    x: 4.517452239990234 * 1.005,
-    y: 3.5739898681640625 * 0.995,
-    z: 2.981771230697632 * 1.05,
-    duration: jumpDuration * 0.2,
-    ease: "power2.out",
-  });
-  t1.to(mesh.scale, {
-    x: 4.517452239990234 * 0.995,
-    y: 3.5739898681640625 * 1.005,
-    z: 2.981771230697632 * 0.995,
-    duration: jumpDuration * 0.3,
-    ease: "power2.out",
-  });
-  t1.to(mesh.position, {
-    y: mesh.position.y + jumpHeight,
-    duration: jumpDuration * 0.5,
-    ease: "power2.out",
-  });
-  t1.to(mesh.scale, {
-    x: 4.517452239990234,
-    y: 3.5739898681640625,
-    z: 2.981771230697632,
-    duration: jumpDuration * 0.3,
-    ease: "power1.inOut",
-  });
-  t1.to(mesh.position, {
-    y: mesh.position.y,
-    duration: jumpDuration * 0.5,
-    ease: "bounce.out",
-  });
-  t1.to(mesh.scale, {
-    x: 4.517452239990234,
-    y: 3.5739898681640625,
-    z: 2.981771230697632,
-    duration: jumpDuration * 0.2,
-    ease: "elastic.out(1, 0.3)",
-  });
-}
+//   t1.to(mesh.scale, {
+//     x: 4.517452239990234 * 1.005,
+//     y: 3.5739898681640625 * 0.995,
+//     z: 2.981771230697632 * 1.05,
+//     duration: jumpDuration * 0.2,
+//     ease: "power2.out",
+//   });
+//   t1.to(mesh.scale, {
+//     x: 4.517452239990234 * 0.995,
+//     y: 3.5739898681640625 * 1.005,
+//     z: 2.981771230697632 * 0.995,
+//     duration: jumpDuration * 0.3,
+//     ease: "power2.out",
+//   });
+//   t1.to(mesh.position, {
+//     y: mesh.position.y + jumpHeight,
+//     duration: jumpDuration * 0.5,
+//     ease: "power2.out",
+//   });
+//   t1.to(mesh.scale, {
+//     x: 4.517452239990234,
+//     y: 3.5739898681640625,
+//     z: 2.981771230697632,
+//     duration: jumpDuration * 0.3,
+//     ease: "power1.inOut",
+//   });
+//   t1.to(mesh.position, {
+//     y: mesh.position.y,
+//     duration: jumpDuration * 0.5,
+//     ease: "bounce.out",
+//   });
+//   t1.to(mesh.scale, {
+//     x: 4.517452239990234,
+//     y: 3.5739898681640625,
+//     z: 2.981771230697632,
+//     duration: jumpDuration * 0.2,
+//     ease: "elastic.out(1, 0.3)",
+//   });
+// }
 
 function showModal(id) {
   const content = modalContent[id];
@@ -216,83 +246,121 @@ function onPointerMove(event) {
 function onClick() {
   // console.log(intersectObject);
   if (intersectObject != "") {
-    if (["character001"].includes(intersectObject)) {
-      jumpCharacter(intersectObject);
-    }
-    // showModal(intersectObject);
+    // if (["character001"].includes(intersectObject)) {
+    //   jumpCharacter(intersectObject);
+    // }
+    showModal(intersectObject);
   }
 }
 
-function moveCharacter(targetPosition, targetRotation) {
-  character.isMoving = true;
+function playerCollisions() {
+  const result = colliderOctTree.capsuleIntersect(playerCollider);
+  // console.log(result)
+  playerOnFloor = false;
 
-  let rotationDiff =
-    ((((targetRotation - character.instance.rotation.y) % (2 * Math.PI)) +
-      3 * Math.PI) %
-      (2 * Math.PI)) -
-    Math.PI;
-  let finalRotation = character.instance.rotation.y + rotationDiff;
+  if (result) {
+    playerOnFloor = result.normal.y > 0;
+    playerCollider.translate(result.normal.multiplyScalar(result.depth));
+    // console.log(playerCollider);
 
-  const t1 = gsap.timeline({
-    onComplete: () => {
+    if (playerOnFloor) {
       character.isMoving = false;
-    },
-  });
-  t1.to(character.instance.position, {
-    x: targetPosition.x,
-    z: targetPosition.z,
-    duration: character.moveDuration,
-  });
-  t1.to(
-    character.instance.rotation,
-    {
-      y: finalRotation,
-      duration: character.moveDuration,
-    },
-    0
-  );
-  t1.to(
-    character.instance.position,
-    {
-      y: character.instance.position.y + character.jumpHeight,
-      duration: character.moveDuration / 2,
-      yoyo: true,
-      repeat: 1,
-    },
-    0
+      playerVelocity.x = 0;
+      playerVelocity.z = 0;
+    }
+  }
+}
+
+// function moveCharacter(targetPosition, targetRotation) {
+//   character.isMoving = true;
+
+//   let rotationDiff =
+//     ((((targetRotation - character.instance.rotation.y) % (2 * Math.PI)) +
+//       3 * Math.PI) %
+//       (2 * Math.PI)) -
+//     Math.PI;
+//   let finalRotation = character.instance.rotation.y + rotationDiff;
+
+//   const t1 = gsap.timeline({
+//     onComplete: () => {
+//       character.isMoving = false;
+//     },
+//   });
+//   t1.to(character.instance.position, {
+//     x: targetPosition.x,
+//     z: targetPosition.z,
+//     duration: character.moveDuration,
+//   });
+//   t1.to(
+//     character.instance.rotation,
+//     {
+//       y: finalRotation,
+//       duration: character.moveDuration,
+//     },
+//     0
+//   );
+//   t1.to(
+//     character.instance.position,
+//     {
+//       y: character.instance.position.y + character.jumpHeight,
+//       duration: character.moveDuration / 2,
+//       yoyo: true,
+//       repeat: 1,
+//     },
+//     0
+//   );
+// }
+
+function updatePlayer() {
+  if (!character.instance) return;
+
+  if (!playerOnFloor) {
+    playerVelocity.y -= GRAVITY * 0.003;
+  }
+  playerCollider.translate(playerVelocity.clone().multiplyScalar(0.1));
+  playerCollisions();
+
+  character.instance.position.copy(playerCollider.start);
+  character.instance.position.y -= CAPSULE_RADIUS;
+  character.instance.rotation.y = THREE.MathUtils.lerp(
+    character.instance.position.y,
+    targetRotation,
+    1
   );
 }
 
 function onKeydown(event) {
   // console.log(event);
   if (character.isMoving) return;
-  const targetPosition = new THREE.Vector3().copy(character.instance.position);
-  let targetRotation = 0;
+  // const targetPosition = new THREE.Vector3().copy(character.instance.position);
+
   switch (event.key.toLowerCase()) {
     case "w":
     case "arrowup":
-      targetPosition.z -= character.moveDistance;
+      playerVelocity.z -= MOVE_SPEED;
       targetRotation = 0;
       break;
     case "s":
     case "arrowdown":
-      targetPosition.z += character.moveDistance;
+      playerVelocity.z += MOVE_SPEED;
       targetRotation = Math.PI;
       break;
     case "a":
     case "arrowleft":
-      targetPosition.x -= character.moveDistance;
+      playerVelocity.x -= MOVE_SPEED;
       targetRotation = -Math.PI / 2;
       break;
     case "d":
     case "arrowright":
-      targetPosition.x += character.moveDistance;
+      playerVelocity.x += MOVE_SPEED;
       targetRotation = Math.PI / 2;
       break;
     default:
       return;
   }
-  moveCharacter(targetPosition, targetRotation);
+  // moveCharacter(targetPosition, targetRotation);
+  playerVelocity.y = JUMP_HEIGHT;
+  character.isMoving = true;
 }
 
 modalExitButton.addEventListener("click", hideModal);
@@ -302,6 +370,7 @@ window.addEventListener("pointermove", onPointerMove);
 window.addEventListener("keydown", onKeydown);
 
 function animate() {
+  updatePlayer();
   raycaster.setFromCamera(pointer, camera);
   const intersects = raycaster.intersectObjects(intersectObjects);
 
