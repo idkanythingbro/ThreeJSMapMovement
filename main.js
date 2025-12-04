@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/Addons.js";
+import { OrbitControls, SavePass } from "three/examples/jsm/Addons.js";
 import { GLTFLoader } from "three/examples/jsm/Addons.js";
 import { instance } from "three/tsl";
 import { Vector3 } from "three/webgpu";
@@ -17,6 +17,7 @@ const sizes = {
 let character = {
   instance: null,
   isMoving: false,
+  spawnPosition: new THREE.Vector3(),
 };
 let targetRotation = 0;
 
@@ -58,11 +59,11 @@ sun.shadow.camera.top = 400;
 sun.shadow.camera.bottom = -300;
 sun.shadow.normalBias = 0.1;
 scene.add(sun);
-const helper = new THREE.DirectionalLightHelper(sun, 5);
-scene.add(helper);
+// const helper = new THREE.DirectionalLightHelper(sun, 5);
+// scene.add(helper);
 
-const shadowHelper = new THREE.CameraHelper(sun.shadow.camera);
-scene.add(shadowHelper);
+// const shadowHelper = new THREE.CameraHelper(sun.shadow.camera);
+// scene.add(shadowHelper);
 // console.log(sun.shadow);
 
 const light = new THREE.AmbientLight(0x404040, 30);
@@ -92,6 +93,7 @@ loader.load(
       }
 
       if (child.name === "character001") {
+        character.spawnPosition.copy(child.position);
         character.instance = child;
         playerCollider.start
           .copy(child.position)
@@ -101,10 +103,11 @@ loader.load(
           .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
       }
 
-      if (child.name === "collider"){
-        console.log(child);
+      if (child.name === "collider") {
+        // console.log(child);
         // child.updateWorldMatrix(true, true);
         colliderOctTree.fromGraphNode(child);
+        child.visible = false;
       }
       // console.log(child);
     });
@@ -217,9 +220,14 @@ function hideModal() {
 camera.position.x = -467.00531867366954;
 camera.position.y = 331.54363568809293;
 camera.position.z = 348.9037679764594;
-// camera.position.x = -475;
-// camera.position.y = 239;
-// camera.position.z = 405;
+
+const cameraOffset = new THREE.Vector3(
+  -467.00531867366954,
+  331.54363568809293,
+  348.9037679764594
+);
+camera.zoom = 2;
+camera.updateProjectionMatrix();
 
 const controls = new OrbitControls(camera, canvas);
 controls.update();
@@ -271,6 +279,19 @@ function playerCollisions() {
   }
 }
 
+function respawnCharacter() {
+  character.instance.position.copy(character.spawnPosition);
+  playerCollider.start
+    .copy(character.spawnPosition)
+    .add(new THREE.Vector3(0, CAPSULE_RADIUS, 0));
+  playerCollider.end
+    .copy(character.spawnPosition)
+    .add(new THREE.Vector3(0, CAPSULE_HEIGHT, 0));
+
+  playerVelocity.set(0, 0, 0);
+  character.isMoving = false;
+}
+
 // function moveCharacter(targetPosition, targetRotation) {
 //   character.isMoving = true;
 
@@ -314,6 +335,11 @@ function playerCollisions() {
 function updatePlayer() {
   if (!character.instance) return;
 
+  if (character.instance.position.y < 0) {
+    respawnCharacter();
+    return;
+  }
+
   if (!playerOnFloor) {
     playerVelocity.y -= GRAVITY * 0.003;
   }
@@ -330,6 +356,10 @@ function updatePlayer() {
 }
 
 function onKeydown(event) {
+  if (event.key.toLowerCase() === "r") {
+    respawnCharacter();
+    return;
+  }
   // console.log(event);
   if (character.isMoving) return;
   // const targetPosition = new THREE.Vector3().copy(character.instance.position);
@@ -371,6 +401,20 @@ window.addEventListener("keydown", onKeydown);
 
 function animate() {
   updatePlayer();
+  if (character.instance) {
+    const targetCameraPosition = new THREE.Vector3(
+      character.instance.position.x + cameraOffset.x,
+      cameraOffset.y,
+      character.instance.position.z + cameraOffset.z
+    );
+    camera.position.copy(targetCameraPosition);
+    camera.lookAt(
+      character.instance.position.x,
+      character.instance.position.y - 30.54363568809293,
+      character.instance.position.z
+    );
+  }
+
   raycaster.setFromCamera(pointer, camera);
   const intersects = raycaster.intersectObjects(intersectObjects);
 
